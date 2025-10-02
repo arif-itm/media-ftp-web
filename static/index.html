@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en" data-mdb-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediaFTP Web</title>
+  <!-- Font Awesome -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
+  <!-- MDB -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/6.4.1/mdb.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background-color: #1a202c;
+      color: #e2e8f0;
+      transition: background-color 0.3s ease;
+    }
+    .navbar {
+      background-color: transparent !important;
+      backdrop-filter: none;
+      box-shadow: none;
+      border: none;
+    }
+    .navbar-brand {
+        color: #e2e8f0 !important;
+        text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+    .card {
+      background-color: #383838;
+    }
+    .form-control {
+        background-color: #2d3748 !important;
+        color: white !important;
+    }
+    .form-label {
+        color: gray !important;
+    }
+    .form-outline .form-control::placeholder {
+        color: #e2e8f0 !important;
+        opacity: 0.5;
+    }
+    .list-group-item {
+        background-color: #2d3748;
+        color: #e2e8f0;
+        border-color: #4a5568;
+    }
+    .list-group-item-action:hover {
+        background-color: #f5f5f5;
+        color: #1a202c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container mt-4">
+    <nav class="navbar navbar-expand-lg mb-4">
+        <div class="container-fluid">
+            <div class="navbar-brand">
+                <i class="fas fa-film me-2"></i> MediaFTP Web
+            </div>
+        </div>
+    </nav>
+
+    <div class="d-flex justify-content-center mb-4">
+        <div class="btn-group">
+            <input type="radio" class="btn-check" name="search-mode" id="btn-folders" autocomplete="off" checked />
+            <label class="btn" for="btn-folders"><i class="fas fa-folder me-2"></i> Folders</label>
+
+            <input type="radio" class="btn-check" name="search-mode" id="btn-bookmarks" autocomplete="off" />
+            <label class="btn" for="btn-bookmarks"><i class="fas fa-bookmark me-2"></i> Bookmarks</label>
+        </div>
+    </div>
+    
+    <div id="controls" class="mb-4">
+      <div class="form-outline">
+        <input type="text" id="search-input" class="form-control form-control-lg" />
+        <label class="form-label" for="search-input">Search and press Enter...</label>
+      </div>
+    </div>
+
+    <div id="loader" class="d-none text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <div id="list"></div>
+  </div>
+
+  <!-- MDB -->
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/6.4.1/mdb.min.js"></script>
+  <script>
+    let searchMode = 'folders';
+    let currentView = 'folders';
+
+    const searchInput = document.getElementById('search-input');
+    const list = document.getElementById('list');
+    const loader = document.getElementById('loader');
+    const btnFolders = document.getElementById('btn-folders');
+    const btnBookmarks = document.getElementById('btn-bookmarks');
+
+    function showLoader() {
+        loader.classList.remove('d-none');
+        list.innerHTML = '';
+    }
+
+    function hideLoader() {
+        loader.classList.add('d-none');
+    }
+
+    btnFolders.addEventListener('change', () => setSearchMode('folders'));
+    btnBookmarks.addEventListener('change', () => setSearchMode('bookmarks'));
+
+    function setSearchMode(mode) {
+        searchMode = mode;
+        list.innerHTML = '';
+        searchInput.value = '';
+        searchInput.style.display = 'block';
+        currentView = 'folders';
+        searchInput.focus();
+
+        if (mode === 'bookmarks') {
+            loadAllBookmarks();
+        }
+    }
+
+    async function loadAllBookmarks() {
+        showLoader();
+        try {
+            let res = await fetch('/bookmarks');
+            let data = await res.json();
+            showList(data, true);
+        } catch (error) {
+            showError('Failed to load bookmarks.');
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async function performSearch() {
+        let query = searchInput.value;
+
+        if (!query) {
+            if (searchMode === 'bookmarks') {
+                loadAllBookmarks();
+            } else {
+                showList([], false);
+            }
+            return;
+        }
+
+        showLoader();
+        try {
+            let res = await fetch(`/${searchMode}?search=${encodeURIComponent(query)}`);
+            let data = await res.json();
+            showList(data, searchMode === 'bookmarks');
+        } catch (error) {
+            showError(`Failed to perform search for ${searchMode}.`);
+        } finally {
+            hideLoader();
+        }
+    }
+
+    searchInput.addEventListener('keyup', function(event) {
+        if (event.key === 'Enter') {
+            performSearch();
+        }
+    });
+
+    function showList(items, bookmarkMode) {
+      list.innerHTML = "";
+
+      if (items.length === 0) {
+          list.innerHTML = '<div class="text-center text-muted p-5"><h5>No items to display.</h5></div>';
+          return;
+      }
+
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card mb-3';
+
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body d-flex flex-wrap justify-content-between align-items-center';
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'me-3 mb-2 mb-md-0';
+        textDiv.innerHTML = `<h5 class="card-title mb-1">${item.name}</h5><p class="card-text small">${item.display_path || item.path}</p>`;
+        
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.className = 'btn-group';
+
+        const openBtn = document.createElement("button");
+        openBtn.className = "btn btn-primary";
+        openBtn.innerHTML = '<i class="fas fa-folder-open me-2"></i> Open';
+        openBtn.onclick = () => listFiles(item.path);
+        buttonsDiv.appendChild(openBtn);
+
+        if (bookmarkMode) {
+          const rmBtn = document.createElement("button");
+          rmBtn.className = "btn btn-danger";
+          rmBtn.innerHTML = '<i class="fas fa-trash me-2"></i> Remove';
+          rmBtn.onclick = () => {
+            fetch("/bookmark/remove", {
+              method: "POST", headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({path: item.path})
+            }).then(loadAllBookmarks);
+          };
+          buttonsDiv.appendChild(rmBtn);
+        } else {
+          const addBtn = document.createElement("button");
+          addBtn.className = "btn btn-success";
+          addBtn.innerHTML = '<i class="fas fa-bookmark me-2"></i> Add';
+          addBtn.onclick = () => {
+            let name = prompt("Enter bookmark name", item.name);
+            if (!name) return;
+            fetch("/bookmark/add", {
+              method: "POST", headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({name: name, path: item.path})
+            });
+          };
+          buttonsDiv.appendChild(addBtn);
+        }
+
+        cardBody.appendChild(textDiv);
+        cardBody.appendChild(buttonsDiv);
+        card.appendChild(cardBody);
+        list.appendChild(card);
+      });
+    }
+
+    async function listFiles(path) {
+      showLoader();
+      try {
+        let res = await fetch(`/files?path=${encodeURIComponent(path)}`);
+        let files = await res.json();
+        
+                currentView = 'files';
+                document.getElementById('controls').classList.add('d-none');      
+      list.innerHTML = "";
+
+      const backButton = document.createElement('button');
+      backButton.className = 'btn btn-light mb-4';
+      backButton.innerHTML = '<i class="fas fa-arrow-left me-2"></i> Back';
+      backButton.onclick = () => {
+        document.getElementById('controls').classList.remove('d-none');
+        currentView = 'folders';
+        if (searchMode === 'bookmarks') {
+            loadAllBookmarks();
+        } else {
+            performSearch();
+        }
+        backButton.remove();
+      };
+        list.appendChild(backButton);
+
+        const hint = document.createElement('div');
+        hint.className = 'text-center text-muted small mb-3';
+        hint.innerHTML = '<i class="fas fa-lightbulb me-2"></i> Pro-tip: Drag and drop files to VLC to play.';
+        list.appendChild(hint);
+
+        if (files.error) {
+          showError(files.error);
+          return;
+        }
+        
+        if (files.length === 0) {
+          list.innerHTML += '<div class="text-center text-muted p-5"><h5>No media files found.</h5></div>';
+        }
+
+        const fileList = document.createElement('div');
+        fileList.className = 'list-group';
+
+        files.forEach(file => {
+          const fileLink = document.createElement('a');
+          fileLink.href = `/stream?path=${encodeURIComponent(file.path)}`;
+          fileLink.className = 'list-group-item list-group-item-action';
+          fileLink.target = "_blank";
+          fileLink.innerHTML = `<i class="fas fa-play-circle me-2"></i> ${file.name}`;
+          fileList.appendChild(fileLink);
+        });
+        list.appendChild(fileList);
+      } catch (error) {
+        showError('Failed to load files.');
+      } finally {
+        hideLoader();
+      }
+    }
+
+    function showError(message) {
+        list.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+    }
+
+    // Initial load
+    if (searchMode === 'bookmarks') {
+        loadAllBookmarks();
+    }
+  </script>
+</body>
+</html>
